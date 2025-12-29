@@ -1,10 +1,13 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { parsePYQText } from './services/geminiService';
 import { SemesterGroup, SubQuestion, LinkEdge } from './types';
 import QuestionCard from './components/QuestionCard';
+import { dummyData } from './data/dummyData';
 
-const STORAGE_KEY = 'pyq_tracker_v12_final'; 
+
+const STORAGE_KEY = 'pyq_tracker_v12_final';
 const COLORS = [
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Green', value: '#10B981' },
@@ -28,7 +31,7 @@ const App: React.FC = () => {
   const [links, setLinks] = useState<LinkEdge[]>([]);
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [redoHistory, setRedoHistory] = useState<HistoryState[]>([]);
-  
+
   const [rawText, setRawText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,9 +39,9 @@ const App: React.FC = () => {
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [lineCoords, setLineCoords] = useState<any[]>([]);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  
-  const [pendingLink, setPendingLink] = useState<{from: string, to: string} | null>(null);
-  const [linkConfig, setLinkConfig] = useState<{type: 'solid' | 'dotted', color: string}>({
+
+  const [pendingLink, setPendingLink] = useState<{ from: string, to: string } | null>(null);
+  const [linkConfig, setLinkConfig] = useState<{ type: 'solid' | 'dotted', color: string }>({
     type: 'solid',
     color: COLORS[0].value
   });
@@ -181,9 +184,17 @@ const App: React.FC = () => {
       pushState(formatted.semesters, []);
       setShowInput(false);
       setRawText('');
-    } catch (err: any) { setError(err.message || 'Formatting error'); }
+    } catch (err: any) {
+      console.error('API Error:', err);
+      // Load dummy data as fallback when API fails
+      pushState(dummyData.semesters, []);
+      setShowInput(false);
+      setRawText('');
+      setError('API unavailable. Showing sample data instead.');
+    }
     finally { setIsLoading(false); }
   };
+
 
   const handleCopySub = useCallback((sq: SubQuestion) => {
     navigator.clipboard.writeText(`next q - ${sq.text}`);
@@ -263,7 +274,7 @@ const App: React.FC = () => {
           </div>
           {totalCount > 0 && <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{doneCount}/{totalCount} DONE</span>}
         </div>
-        
+
         <div className="flex items-center gap-6">
           <h1 className="text-base font-black text-gray-800 tracking-tight">PYQ Exam Master</h1>
           <div className="flex items-center gap-4">
@@ -312,11 +323,11 @@ const App: React.FC = () => {
               <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connect Questions</h4>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-8">
-              <button onClick={() => setLinkConfig({...linkConfig, type: 'solid'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'solid' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>SOLID (SYNC)</button>
-              <button onClick={() => setLinkConfig({...linkConfig, type: 'dotted'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'dotted' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>DOTTED (VISUAL)</button>
+              <button onClick={() => setLinkConfig({ ...linkConfig, type: 'solid' })} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'solid' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>SOLID (SYNC)</button>
+              <button onClick={() => setLinkConfig({ ...linkConfig, type: 'dotted' })} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'dotted' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>DOTTED (VISUAL)</button>
             </div>
             <div className="grid grid-cols-6 gap-3 mb-8">
-              {COLORS.map(c => <button key={c.value} onClick={() => setLinkConfig({...linkConfig, color: c.value})} className={`w-full aspect-square rounded-full transition-transform hover:scale-110 ${linkConfig.color === c.value ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`} style={{ backgroundColor: c.value }} />)}
+              {COLORS.map(c => <button key={c.value} onClick={() => setLinkConfig({ ...linkConfig, color: c.value })} className={`w-full aspect-square rounded-full transition-transform hover:scale-110 ${linkConfig.color === c.value ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`} style={{ backgroundColor: c.value }} />)}
             </div>
             <button onClick={finalizeLink} className="w-full py-5 bg-blue-600 text-white text-[11px] font-black rounded-2xl uppercase shadow-lg">Confirm Connection</button>
           </div>
@@ -342,17 +353,17 @@ const App: React.FC = () => {
                   <h2 className="text-5xl font-black text-gray-900 handwritten italic tracking-tighter leading-none">{semester.title}</h2>
                   <div className="flex-grow h-[1px] bg-gray-100/50"></div>
                 </div>
-                
+
                 <div className="space-y-10">
                   {semester.questions.map((q, idx) => (
                     <React.Fragment key={q.id}>
-                      <QuestionCard 
-                        question={q} 
-                        linkingId={linkingId} 
-                        onCopySub={handleCopySub} 
-                        onDoneSub={handleDoneSub} 
-                        onLinkToggle={handleLinkToggle} 
-                        registerRef={registerSqRef} 
+                      <QuestionCard
+                        question={q}
+                        linkingId={linkingId}
+                        onCopySub={handleCopySub}
+                        onDoneSub={handleDoneSub}
+                        onLinkToggle={handleLinkToggle}
+                        registerRef={registerSqRef}
                       />
                       {idx < semester.questions.length - 1 && (
                         <div className="flex items-center gap-8 py-2">
