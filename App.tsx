@@ -7,7 +7,7 @@ import QuestionCard from './components/QuestionCard';
 import { dummyData } from './data/dummyData';
 
 
-const STORAGE_KEY = 'pyq_tracker_v12_final';
+const STORAGE_KEY = 'pyq_tracker_v14_compact';
 const COLORS = [
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Green', value: '#10B981' },
@@ -39,6 +39,8 @@ const App: React.FC = () => {
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [lineCoords, setLineCoords] = useState<any[]>([]);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [compactMode, setCompactMode] = useState(true); // Exam mode by default
+  const [twoColumnLayout, setTwoColumnLayout] = useState(true); // 2 columns by default
 
   const [pendingLink, setPendingLink] = useState<{ from: string, to: string } | null>(null);
   const [linkConfig, setLinkConfig] = useState<{ type: 'solid' | 'dotted', color: string }>({
@@ -266,18 +268,65 @@ const App: React.FC = () => {
   return (
     <div className="w-full h-screen bg-[#FDFDFD] flex flex-col overflow-hidden text-gray-900">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-6 py-3 flex justify-between items-center z-30 shadow-sm">
+      <header className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-30 shadow-sm relative">
+        {/* Left Section - Undo/Redo */}
         <div className="flex items-center gap-4">
           <div className="flex gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-100">
             <button onClick={undo} disabled={history.length === 0} className="p-2 disabled:opacity-20 text-gray-500 hover:bg-white hover:shadow-sm rounded-lg transition-all" title="Undo"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg></button>
             <button onClick={redo} disabled={redoHistory.length === 0} className="p-2 disabled:opacity-20 text-gray-500 hover:bg-white hover:shadow-sm rounded-lg transition-all" title="Redo"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" /></svg></button>
           </div>
-          {totalCount > 0 && <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{doneCount}/{totalCount} DONE</span>}
         </div>
 
+        {/* Center Section - Progress Bar */}
+        {totalCount > 0 && (
+          <div className="absolute left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Overall Progress</span>
+              <span className="text-sm font-black text-blue-600">{Math.round((doneCount / totalCount) * 100)}%</span>
+            </div>
+            <div className="w-64 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-600 transition-all duration-500"
+                style={{ width: `${(doneCount / totalCount) * 100}%` }}
+              ></div>
+            </div>
+            <span className="text-xs text-gray-500">{doneCount} / {totalCount} Questions</span>
+          </div>
+        )}
+
+        {/* Right Section - Title & Controls */}
         <div className="flex items-center gap-6">
           <h1 className="text-base font-black text-gray-800 tracking-tight">PYQ Exam Master</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            {!showInput && (
+              <>
+                {/* Column Layout Toggle */}
+                <button
+                  onClick={() => setTwoColumnLayout(!twoColumnLayout)}
+                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-all"
+                  title={twoColumnLayout ? "Switch to 1 Column" : "Switch to 2 Columns"}
+                >
+                  {twoColumnLayout ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 4H5a2 2 0 00-2 2v14a2 2 0 002 2h4m0-18v18m0-18h6m-6 0v18m6-18h4a2 2 0 012 2v14a2 2 0 01-2 2h-4m0-18v18" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Exam Mode Toggle */}
+                <button
+                  onClick={() => setCompactMode(!compactMode)}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${compactMode ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
+                  title="Toggle Exam Mode"
+                >
+                  {compactMode ? '🧠 EXAM MODE' : '📖 FULL VIEW'}
+                </button>
+              </>
+            )}
             {!showInput && <button onClick={() => setShowInput(true)} className="text-[11px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest">IMPORT</button>}
             {data.length > 0 && <button onClick={() => setShowResetConfirm(true)} className="text-[11px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest">RESET</button>}
           </div>
@@ -292,8 +341,19 @@ const App: React.FC = () => {
               <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Import Material</h3>
               {data.length > 0 && <button onClick={() => setShowInput(false)} className="text-gray-300 hover:text-gray-900 transition-colors"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg></button>}
             </div>
-            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Paste PDF/Exam text here..." className="w-full h-64 p-6 border border-gray-100 rounded-2xl text-sm outline-none bg-gray-50 mb-8 font-mono leading-relaxed" />
-            <button onClick={handleFormat} disabled={isLoading || !rawText.trim()} className="w-full py-5 rounded-2xl font-black text-sm uppercase tracking-[0.3em] bg-blue-600 text-white shadow-xl hover:bg-blue-700 disabled:opacity-30 transition-all">{isLoading ? 'Processing Material...' : 'Generate Tracker'}</button>
+            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Paste PDF/Exam text here..." className="w-full h-64 p-6 border border-gray-100 rounded-2xl text-sm outline-none bg-gray-50 mb-6 font-mono leading-relaxed" />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  pushState(dummyData.semesters, []);
+                  setShowInput(false);
+                }}
+                className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-wider bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all"
+              >
+                📚 Load Sample Data
+              </button>
+              <button onClick={handleFormat} disabled={isLoading || !rawText.trim()} className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-wider bg-blue-600 text-white shadow-xl hover:bg-blue-700 disabled:opacity-30 transition-all">{isLoading ? 'Processing...' : 'Generate Tracker'}</button>
+            </div>
           </div>
         </div>
       )}
@@ -346,15 +406,20 @@ const App: React.FC = () => {
         </svg>
 
         {data.length > 0 ? (
-          <div className="w-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 pb-32">
+          <div className={`w-full ${twoColumnLayout ? 'max-w-[1400px]' : 'max-w-[800px]'} mx-auto grid ${twoColumnLayout ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-${compactMode ? '6' : '8'} pb-32`}>
             {data.map((semester) => (
-              <div key={semester.id} className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm relative group h-fit">
-                <div className="flex items-center gap-4 mb-8 border-b border-gray-50 pb-3">
-                  <h2 className="text-5xl font-black text-gray-900 handwritten italic tracking-tighter leading-none">{semester.title}</h2>
-                  <div className="flex-grow h-[1px] bg-gray-100/50"></div>
+              <div key={semester.id} className={`bg-white rounded-${compactMode ? '2xl' : '3xl'} ${compactMode ? 'p-4' : 'p-8'} border border-gray-100 shadow-sm relative group h-fit flex gap-${compactMode ? '3' : '5'}`}>
+                {/* Semester Title - Gray Box on Left (Centered) */}
+                <div className="flex-shrink-0 flex items-center">
+                  <div className={`bg-gray-100 ${compactMode ? 'px-2 py-3' : 'px-3 py-4'} rounded-lg`}>
+                    <h2 className={`${compactMode ? 'text-base' : 'text-xl'} font-black text-gray-700 handwritten italic tracking-tight leading-none`}>
+                      {semester.title}
+                    </h2>
+                  </div>
                 </div>
 
-                <div className="space-y-10">
+                {/* Questions Container */}
+                <div className={`flex-grow ${compactMode ? 'space-y-4' : 'space-y-10'}`}>
                   {semester.questions.map((q, idx) => (
                     <React.Fragment key={q.id}>
                       <QuestionCard
@@ -364,6 +429,7 @@ const App: React.FC = () => {
                         onDoneSub={handleDoneSub}
                         onLinkToggle={handleLinkToggle}
                         registerRef={registerSqRef}
+                        compactMode={compactMode}
                       />
                       {idx < semester.questions.length - 1 && (
                         <div className="flex items-center gap-8 py-2">
