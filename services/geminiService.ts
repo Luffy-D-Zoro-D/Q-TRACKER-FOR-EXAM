@@ -5,6 +5,13 @@ import { FormattedData } from "../types";
 function getGroqClient() {
   const apiKey = import.meta.env.VITE_GROQ_API_KEY;
 
+  // Debug logging
+  console.log('Environment check:', {
+    hasApiKey: !!apiKey,
+    apiKeyLength: apiKey?.length || 0,
+    envKeys: Object.keys(import.meta.env)
+  });
+
   if (!apiKey) {
     throw new Error("Groq API key is not configured. Please add VITE_GROQ_API_KEY to your .env file.");
   }
