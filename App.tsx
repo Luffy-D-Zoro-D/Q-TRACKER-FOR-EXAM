@@ -40,7 +40,8 @@ const App: React.FC = () => {
   const [lineCoords, setLineCoords] = useState<any[]>([]);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [compactMode, setCompactMode] = useState(true); // Exam mode by default
-  const [twoColumnLayout, setTwoColumnLayout] = useState(true); // 2 columns by default
+  const [twoColumnLayout, setTwoColumnLayout] = useState(false); // Default to 1-column view
+  const [showFrequency, setShowFrequency] = useState(true); // 2 columns by default
 
   const [pendingLink, setPendingLink] = useState<{ from: string, to: string } | null>(null);
   const [linkConfig, setLinkConfig] = useState<{ type: 'solid' | 'dotted', color: string }>({
