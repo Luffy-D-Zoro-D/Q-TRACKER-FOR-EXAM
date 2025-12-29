@@ -2,9 +2,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FormattedData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+function getAI() {
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your .env file.");
+  }
+  return new GoogleGenAI({ apiKey });
+}
 
 export async function parsePYQText(rawText: string): Promise<FormattedData> {
+  const ai = getAI();
+
   const prompt = `
     Extract questions from the following text and format them into a structured JSON format.
     

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { parsePYQText } from './services/geminiService';
 import { SemesterGroup, SubQuestion } from './types';
 import QuestionCard from './components/QuestionCard';
+import { dummyData } from './data/dummyData';
 
 const STORAGE_KEY = 'pyq_study_v2_data';
 
@@ -41,7 +42,11 @@ const App: React.FC = () => {
       setData(formatted.semesters);
       setShowInput(false);
     } catch (err: any) {
-      setError(err.message || 'Error.');
+      console.error('API Error:', err);
+      // Load dummy data as fallback when API fails
+      setData(dummyData.semesters);
+      setShowInput(false);
+      setError('API unavailable. Showing sample data instead.');
     } finally {
       setIsLoading(false);
     }
@@ -59,7 +64,7 @@ const App: React.FC = () => {
         if (q.id === qId) {
           return {
             ...q,
-            subQuestions: q.subQuestions.map(sq => 
+            subQuestions: q.subQuestions.map(sq =>
               sq.id === sqId ? { ...sq, isDone: true } : sq
             )
           };
@@ -141,7 +146,7 @@ const App: React.FC = () => {
                     {Math.round((semester.questions.flatMap(q => q.subQuestions).filter(sq => sq.isDone).length / semester.questions.flatMap(q => q.subQuestions).length) * 100)}% Complete
                   </span>
                 </div>
-                
+
                 <div className="space-y-2">
                   {semester.questions.map((q, idx) => (
                     <React.Fragment key={q.id}>
