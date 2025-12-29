@@ -1,37 +1,176 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { parsePYQText } from './services/geminiService';
-import { SemesterGroup, SubQuestion } from './types';
+import { SemesterGroup, SubQuestion, LinkEdge } from './types';
 import QuestionCard from './components/QuestionCard';
-import { dummyData } from './data/dummyData';
 
-const STORAGE_KEY = 'pyq_study_v2_data';
+const STORAGE_KEY = 'pyq_tracker_v12_final'; 
+const COLORS = [
+  { name: 'Blue', value: '#3B82F6' },
+  { name: 'Green', value: '#10B981' },
+  { name: 'Orange', value: '#F59E0B' },
+  { name: 'Purple', value: '#8B5CF6' },
+  { name: 'Red', value: '#EF4444' },
+  { name: 'Pink', value: '#EC4899' }
+];
+
+function hashCode(str: string) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
 
 const App: React.FC = () => {
-  const [rawText, setRawText] = useState('');
   const [data, setData] = useState<SemesterGroup[]>([]);
+  const [links, setLinks] = useState<LinkEdge[]>([]);
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [redoHistory, setRedoHistory] = useState<HistoryState[]>([]);
+  
+  const [rawText, setRawText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInput, setShowInput] = useState(true);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [lineCoords, setLineCoords] = useState<any[]>([]);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  
+  const [pendingLink, setPendingLink] = useState<{from: string, to: string} | null>(null);
+  const [linkConfig, setLinkConfig] = useState<{type: 'solid' | 'dotted', color: string}>({
+    type: 'solid',
+    color: COLORS[0].value
+  });
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sqRefs = useRef(new Map<string, HTMLElement>());
+
+  const registerSqRef = useCallback((id: string, el: HTMLElement | null) => {
+    if (el) sqRefs.current.set(id, el);
+    else sqRefs.current.delete(id);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setData(parsed);
-        if (parsed.length > 0) setShowInput(false);
-      } catch (e) {
-        console.error("Error loading saved data", e);
-      }
+        if (Array.isArray(parsed.data)) {
+          setData(parsed.data);
+          setLinks(parsed.links || []);
+          if (parsed.data.length > 0) setShowInput(false);
+        }
+      } catch (e) { console.error("Load failed", e); }
     }
   }, []);
 
   useEffect(() => {
-    if (data.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (data.length === 0 && links.length === 0 && !showInput) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ data, links }));
+  }, [data, links, showInput]);
+
+  const pushState = useCallback((newData: SemesterGroup[], newLinks: LinkEdge[]) => {
+    setHistory(prev => [...prev, { data, links }].slice(-50));
+    setRedoHistory([]);
+    setData(newData);
+    setLinks(newLinks);
+  }, [data, links, history]);
+
+  const undo = useCallback(() => {
+    if (history.length === 0) return;
+    const last = history[history.length - 1];
+    setRedoHistory(prev => [...prev, { data, links }]);
+    setHistory(prev => prev.slice(0, -1));
+    setData(last.data);
+    setLinks(last.links);
+  }, [history, data, links]);
+
+  const redo = useCallback(() => {
+    if (redoHistory.length === 0) return;
+    const next = redoHistory[redoHistory.length - 1];
+    setHistory(prev => [...prev, { data, links }]);
+    setRedoHistory(prev => prev.slice(0, -1));
+    setData(next.data);
+    setLinks(next.links);
+  }, [redoHistory, data, links]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) redo(); else undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        redo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+  const getAllComponents = useCallback((edges: LinkEdge[]) => {
+    const adjacency = new Map<string, Set<string>>();
+    const allNodes = new Set<string>();
+    edges.forEach(e => {
+      if (!adjacency.has(e.from)) adjacency.set(e.from, new Set());
+      if (!adjacency.has(e.to)) adjacency.set(e.to, new Set());
+      adjacency.get(e.from)!.add(e.to);
+      adjacency.get(e.to)!.add(e.from);
+      allNodes.add(e.from);
+      allNodes.add(e.to);
+    });
+    const components: Set<string>[] = [];
+    const visited = new Set<string>();
+    allNodes.forEach(node => {
+      if (!visited.has(node)) {
+        const component = new Set<string>();
+        const stack = [node];
+        while (stack.length) {
+          const cur = stack.pop()!;
+          if (visited.has(cur)) continue;
+          visited.add(cur);
+          component.add(cur);
+          adjacency.get(cur)?.forEach(neighbor => stack.push(neighbor));
+        }
+        components.push(component);
+      }
+    });
+    return components;
+  }, []);
+
+  const updateLines = useCallback(() => {
+    if (!containerRef.current || links.length === 0) {
+      setLineCoords([]);
+      return;
     }
-  }, [data]);
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const components = getAllComponents(links);
+    const newCoords = components.map((group) => {
+      const nodeIds = Array.from(group);
+      const elements = nodeIds.map(id => sqRefs.current.get(id)).filter(Boolean) as HTMLElement[];
+      if (elements.length < 2) return null;
+      const rects = elements.map(el => el.getBoundingClientRect());
+      const minTop = Math.min(...rects.map(r => r.top)) - containerRect.top + rects[0].height / 2;
+      const maxTop = Math.max(...rects.map(r => r.top)) - containerRect.top + rects[0].height / 2;
+      const sortedIds = nodeIds.sort().join(',');
+      const spineX = 10 + (Math.abs(hashCode(sortedIds)) % 30);
+      const branches = nodeIds.map(id => {
+        const el = sqRefs.current.get(id);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { y: r.top - containerRect.top + r.height / 2, tx: r.left - containerRect.left };
+      }).filter(Boolean);
+      const primaryEdge = links.find(e => group.has(e.from) || group.has(e.to))!;
+      return { id: sortedIds, spineX, spineY1: minTop, spineY2: maxTop, branches, color: primaryEdge.visual.color, style: primaryEdge.visual.style };
+    }).filter(Boolean);
+    setLineCoords(newCoords);
+  }, [links, data, showInput, getAllComponents]);
+
+  useEffect(() => {
+    updateLines();
+    const timer = setTimeout(updateLines, 200);
+    window.addEventListener('resize', updateLines);
+    return () => { window.removeEventListener('resize', updateLines); clearTimeout(timer); };
+  }, [updateLines, data, links, showInput]);
 
   const handleFormat = async () => {
     if (!rawText.trim()) return;
@@ -39,125 +178,187 @@ const App: React.FC = () => {
     setError(null);
     try {
       const formatted = await parsePYQText(rawText);
-      setData(formatted.semesters);
+      pushState(formatted.semesters, []);
       setShowInput(false);
-    } catch (err: any) {
-      console.error('API Error:', err);
-      // Load dummy data as fallback when API fails
-      setData(dummyData.semesters);
-      setShowInput(false);
-      setError('API unavailable. Showing sample data instead.');
-    } finally {
-      setIsLoading(false);
-    }
+      setRawText('');
+    } catch (err: any) { setError(err.message || 'Formatting error'); }
+    finally { setIsLoading(false); }
   };
 
   const handleCopySub = useCallback((sq: SubQuestion) => {
-    const textToCopy = `next q - ${sq.text}`;
-    navigator.clipboard.writeText(textToCopy);
+    navigator.clipboard.writeText(`next q - ${sq.text}`);
   }, []);
 
   const handleDoneSub = useCallback((qId: string, sqId: string) => {
-    setData(prev => prev.map(sem => ({
-      ...sem,
-      questions: sem.questions.map(q => {
-        if (q.id === qId) {
-          return {
-            ...q,
-            subQuestions: q.subQuestions.map(sq =>
-              sq.id === sqId ? { ...sq, isDone: true } : sq
-            )
-          };
-        }
-        return q;
-      })
-    })));
-  }, []);
-
-  const clearAll = () => {
-    if (window.confirm('Clear all?')) {
-      setData([]);
-      setRawText('');
-      setShowInput(true);
-      localStorage.removeItem(STORAGE_KEY);
+    let currentStatus = false;
+    for (const sem of data) {
+      for (const q of sem.questions) {
+        const sq = q.subQuestions.find(s => s.id === sqId);
+        if (sq) { currentStatus = sq.isDone; break; }
+      }
     }
+    const newState = !currentStatus;
+    const syncEdges = links.filter(l => l.sync);
+    const adjacency = new Map<string, Set<string>>();
+    syncEdges.forEach(e => {
+      if (!adjacency.has(e.from)) adjacency.set(e.from, new Set());
+      if (!adjacency.has(e.to)) adjacency.set(e.to, new Set());
+      adjacency.get(e.from)!.add(e.to);
+      adjacency.get(e.to)!.add(e.from);
+    });
+    const group = new Set<string>([sqId]);
+    const stack = [sqId];
+    const visited = new Set<string>();
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      group.add(cur);
+      adjacency.get(cur)?.forEach(n => stack.push(n));
+    }
+    const updatedData = data.map(sem => ({
+      ...sem,
+      questions: sem.questions.map(q => ({
+        ...q,
+        subQuestions: q.subQuestions.map(sq => group.has(sq.id) ? { ...sq, isDone: newState } : sq)
+      }))
+    }));
+    pushState(updatedData, links);
+  }, [data, links, pushState]);
+
+  const handleLinkToggle = (sqId: string) => {
+    if (!linkingId) { setLinkingId(sqId); }
+    else { if (linkingId === sqId) { setLinkingId(null); } else { setPendingLink({ from: linkingId, to: sqId }); setLinkingId(null); } }
+  };
+
+  const finalizeLink = () => {
+    if (!pendingLink) return;
+    const newEdge: LinkEdge = { id: crypto.randomUUID(), from: pendingLink.from, to: pendingLink.to, visual: { style: linkConfig.type, color: linkConfig.color }, sync: linkConfig.type === 'solid' };
+    pushState(data, [...links, newEdge]);
+    setPendingLink(null);
+  };
+
+  const executeReset = () => {
+    setHistory(prev => [...prev, { data, links }].slice(-50));
+    setRedoHistory([]);
+    setData([]);
+    setLinks([]);
+    setRawText('');
+    setShowInput(true);
+    localStorage.removeItem(STORAGE_KEY);
+    setShowResetConfirm(false);
   };
 
   const doneCount = data.flatMap(s => s.questions.flatMap(q => q.subQuestions)).filter(sq => sq.isDone).length;
   const totalCount = data.flatMap(s => s.questions.flatMap(q => q.subQuestions)).length;
 
   return (
-    <div className="w-full h-screen bg-[#FDFDFD] p-2 flex flex-col overflow-hidden">
-      {/* Mini Controls Bar */}
-      <div className="w-full max-w-xl mx-auto flex justify-between items-center mb-2 px-1">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-black tracking-tighter uppercase text-gray-400">Tracker</span>
-          {totalCount > 0 && (
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-gray-100 px-2 py-0.5 rounded-full">
-              {doneCount}/{totalCount} Done
-            </span>
-          )}
+    <div className="w-full h-screen bg-[#FDFDFD] flex flex-col overflow-hidden text-gray-900">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 px-6 py-3 flex justify-between items-center z-30 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-100">
+            <button onClick={undo} disabled={history.length === 0} className="p-2 disabled:opacity-20 text-gray-500 hover:bg-white hover:shadow-sm rounded-lg transition-all" title="Undo"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg></button>
+            <button onClick={redo} disabled={redoHistory.length === 0} className="p-2 disabled:opacity-20 text-gray-500 hover:bg-white hover:shadow-sm rounded-lg transition-all" title="Redo"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" /></svg></button>
+          </div>
+          {totalCount > 0 && <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{doneCount}/{totalCount} DONE</span>}
         </div>
-        <div className="flex gap-4">
-          {!showInput && (
-            <button onClick={() => setShowInput(true)} className="text-[9px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest transition-colors">
-              + Add
-            </button>
-          )}
-          {data.length > 0 && (
-            <button onClick={clearAll} className="text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest transition-colors">
-              Reset
-            </button>
-          )}
+        
+        <div className="flex items-center gap-6">
+          <h1 className="text-base font-black text-gray-800 tracking-tight">PYQ Exam Master</h1>
+          <div className="flex items-center gap-4">
+            {!showInput && <button onClick={() => setShowInput(true)} className="text-[11px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest">IMPORT</button>}
+            {data.length > 0 && <button onClick={() => setShowResetConfirm(true)} className="text-[11px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest">RESET</button>}
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Collapsible Input Area */}
+      {/* Input Overlay */}
       {showInput && (
-        <div className="mb-4 w-full max-w-lg mx-auto bg-white p-3 rounded border border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-1">
-          <textarea
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-            placeholder="Paste raw text here..."
-            className="w-full h-20 p-2 border border-gray-200 rounded text-[11px] focus:ring-1 focus:ring-yellow-400 outline-none resize-none bg-gray-50 mb-2"
-          />
-          <button
-            onClick={handleFormat}
-            disabled={isLoading || !rawText.trim()}
-            className="w-full py-2 rounded font-black text-[10px] uppercase tracking-wider bg-yellow-400 text-gray-900 hover:bg-yellow-500 active:scale-[0.98] disabled:opacity-30 transition-all shadow-sm"
-          >
-            {isLoading ? 'Processing...' : 'Format Now'}
-          </button>
-          {error && <p className="mt-1 text-[8px] text-red-500 font-bold text-center uppercase">{error}</p>}
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-md z-40 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white p-10 rounded-3xl border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Import Material</h3>
+              {data.length > 0 && <button onClick={() => setShowInput(false)} className="text-gray-300 hover:text-gray-900 transition-colors"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg></button>}
+            </div>
+            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Paste PDF/Exam text here..." className="w-full h-64 p-6 border border-gray-100 rounded-2xl text-sm outline-none bg-gray-50 mb-8 font-mono leading-relaxed" />
+            <button onClick={handleFormat} disabled={isLoading || !rawText.trim()} className="w-full py-5 rounded-2xl font-black text-sm uppercase tracking-[0.3em] bg-blue-600 text-white shadow-xl hover:bg-blue-700 disabled:opacity-30 transition-all">{isLoading ? 'Processing Material...' : 'Generate Tracker'}</button>
+          </div>
         </div>
       )}
 
-      {/* Vertical List Display */}
-      <main className="flex-grow overflow-y-auto w-full px-1">
-        {data.length > 0 ? (
-          <div className="w-full max-w-xl mx-auto space-y-4">
-            {data.map((semester) => (
-              <div key={semester.id} className="bg-[#FFF8D6] rounded-md p-3 border-b-2 border-yellow-200 flex flex-col">
-                <div className="flex justify-between items-center mb-2 pb-1 border-b border-yellow-300/40">
-                  <h2 className="text-sm font-black text-gray-800 italic uppercase">
-                    {semester.title}
-                  </h2>
-                  <span className="text-[8px] font-bold text-yellow-600">
-                    {Math.round((semester.questions.flatMap(q => q.subQuestions).filter(sq => sq.isDone).length / semester.questions.flatMap(q => q.subQuestions).length) * 100)}% Complete
-                  </span>
-                </div>
+      {/* Custom Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full border border-gray-50 text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </div>
+            <h4 className="text-lg font-black text-gray-900 mb-2">Reset Workspace?</h4>
+            <p className="text-sm text-gray-500 mb-8">This will clear all your progress and imported questions. This action can be undone via Ctrl+Z.</p>
+            <div className="flex gap-4">
+              <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 text-xs font-black text-gray-500 bg-gray-100 rounded-2xl hover:bg-gray-200 transition-colors">CANCEL</button>
+              <button onClick={executeReset} className="flex-1 py-4 text-xs font-black text-white bg-red-500 rounded-2xl hover:bg-red-600 shadow-lg transition-all">YES, RESET</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-                <div className="space-y-2">
+      {/* Linking Modal */}
+      {pendingLink && (
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-50">
+            <div className="text-center mb-8">
+              <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connect Questions</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <button onClick={() => setLinkConfig({...linkConfig, type: 'solid'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'solid' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>SOLID (SYNC)</button>
+              <button onClick={() => setLinkConfig({...linkConfig, type: 'dotted'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'dotted' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>DOTTED (VISUAL)</button>
+            </div>
+            <div className="grid grid-cols-6 gap-3 mb-8">
+              {COLORS.map(c => <button key={c.value} onClick={() => setLinkConfig({...linkConfig, color: c.value})} className={`w-full aspect-square rounded-full transition-transform hover:scale-110 ${linkConfig.color === c.value ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`} style={{ backgroundColor: c.value }} />)}
+            </div>
+            <button onClick={finalizeLink} className="w-full py-5 bg-blue-600 text-white text-[11px] font-black rounded-2xl uppercase shadow-lg">Confirm Connection</button>
+          </div>
+        </div>
+      )}
+
+      {/* 2-Column Grid Workspace */}
+      <main ref={containerRef} className="flex-grow overflow-y-auto w-full p-6 relative scrollbar-hide">
+        <svg className="absolute inset-0 pointer-events-none w-full h-full min-h-screen z-10">
+          {lineCoords.map((l) => (
+            <g key={l.id} className="pointer-events-auto">
+              <line x1={l.spineX} y1={l.spineY1} x2={l.spineX} y2={l.spineY2} stroke={l.color} strokeWidth="2.5" strokeDasharray={l.style === 'dotted' ? '5 4' : 'none'} opacity="0.4" strokeLinecap="round" />
+              {l.branches.map((b: any, bi: number) => <line key={bi} x1={l.spineX} y1={b.y} x2={b.tx} y2={b.y} stroke={l.color} strokeWidth="2.5" strokeDasharray={l.style === 'dotted' ? '5 4' : 'none'} opacity="0.4" strokeLinecap="round" />)}
+            </g>
+          ))}
+        </svg>
+
+        {data.length > 0 ? (
+          <div className="w-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 pb-32">
+            {data.map((semester) => (
+              <div key={semester.id} className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm relative group h-fit">
+                <div className="flex items-center gap-4 mb-8 border-b border-gray-50 pb-3">
+                  <h2 className="text-5xl font-black text-gray-900 handwritten italic tracking-tighter leading-none">{semester.title}</h2>
+                  <div className="flex-grow h-[1px] bg-gray-100/50"></div>
+                </div>
+                
+                <div className="space-y-10">
                   {semester.questions.map((q, idx) => (
                     <React.Fragment key={q.id}>
-                      <QuestionCard
-                        question={q}
-                        onCopySub={handleCopySub}
-                        onDoneSub={handleDoneSub}
+                      <QuestionCard 
+                        question={q} 
+                        linkingId={linkingId} 
+                        onCopySub={handleCopySub} 
+                        onDoneSub={handleDoneSub} 
+                        onLinkToggle={handleLinkToggle} 
+                        registerRef={registerSqRef} 
                       />
                       {idx < semester.questions.length - 1 && (
-                        <div className="flex items-center justify-center py-1">
-                          <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest bg-yellow-300/20 px-4 rounded">OR</span>
+                        <div className="flex items-center gap-8 py-2">
+                          <div className="h-[1px] bg-gray-50 flex-grow"></div>
+                          <span className="text-[10px] font-black text-gray-200 uppercase tracking-[0.8em]">OR</span>
+                          <div className="h-[1px] bg-gray-50 flex-grow"></div>
                         </div>
                       )}
                     </React.Fragment>
@@ -168,12 +369,30 @@ const App: React.FC = () => {
           </div>
         ) : !isLoading && !showInput && (
           <div className="flex flex-col items-center justify-center h-full text-gray-300">
-            <p className="text-[10px] font-black uppercase tracking-widest">Empty</p>
+            <p className="text-sm font-black uppercase tracking-widest mb-8">Workspace Empty</p>
+            <button onClick={() => setShowInput(true)} className="px-12 py-5 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl">Initialize Tracker</button>
           </div>
         )}
       </main>
+
+      {/* Target Mode UI */}
+      {linkingId && (
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-10 py-5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-[0_25px_70px_-15px_rgba(0,0,0,0.6)] z-50 flex items-center gap-6 animate-bounce">
+          <div className="relative">
+            <div className="w-3 h-3 rounded-full bg-blue-400 animate-ping absolute"></div>
+            <div className="w-3 h-3 rounded-full bg-blue-400 relative"></div>
+          </div>
+          Select matching question
+          <button onClick={() => setLinkingId(null)} className="ml-4 text-gray-500 hover:text-white transition-colors">✕</button>
+        </div>
+      )}
     </div>
   );
 };
+
+interface HistoryState {
+  data: SemesterGroup[];
+  links: LinkEdge[];
+}
 
 export default App;
