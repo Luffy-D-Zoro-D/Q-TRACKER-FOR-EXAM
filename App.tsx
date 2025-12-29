@@ -4,7 +4,7 @@ import { parsePYQText } from './services/geminiService';
 import { SemesterGroup, SubQuestion, LinkEdge } from './types';
 import QuestionCard from './components/QuestionCard';
 
-const STORAGE_KEY = 'pyq_tracker_v12_final'; 
+const STORAGE_KEY = 'pyq_tracker_v13_final'; 
 const COLORS = [
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Green', value: '#10B981' },
@@ -31,7 +31,6 @@ const App: React.FC = () => {
   
   const [rawText, setRawText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showInput, setShowInput] = useState(true);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [lineCoords, setLineCoords] = useState<any[]>([]);
@@ -75,7 +74,7 @@ const App: React.FC = () => {
     setRedoHistory([]);
     setData(newData);
     setLinks(newLinks);
-  }, [data, links, history]);
+  }, [data, links]);
 
   const undo = useCallback(() => {
     if (history.length === 0) return;
@@ -175,13 +174,12 @@ const App: React.FC = () => {
   const handleFormat = async () => {
     if (!rawText.trim()) return;
     setIsLoading(true);
-    setError(null);
     try {
       const formatted = await parsePYQText(rawText);
       pushState(formatted.semesters, []);
       setShowInput(false);
       setRawText('');
-    } catch (err: any) { setError(err.message || 'Formatting error'); }
+    } catch (err: any) { console.error(err); }
     finally { setIsLoading(false); }
   };
 
@@ -253,21 +251,25 @@ const App: React.FC = () => {
   const totalCount = data.flatMap(s => s.questions.flatMap(q => q.subQuestions)).length;
 
   return (
-    <div className="w-full h-screen bg-[#FDFDFD] flex flex-col overflow-hidden text-gray-900">
+    <div className="w-full h-screen bg-[#F8F8F8] flex flex-col overflow-hidden text-gray-900">
       {/* Header */}
       <header className="bg-white border-b border-gray-100 px-6 py-3 flex justify-between items-center z-30 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="flex gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-100">
-            <button onClick={undo} disabled={history.length === 0} className="p-2 disabled:opacity-20 text-gray-500 hover:bg-white hover:shadow-sm rounded-lg transition-all" title="Undo"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg></button>
-            <button onClick={redo} disabled={redoHistory.length === 0} className="p-2 disabled:opacity-20 text-gray-500 hover:bg-white hover:shadow-sm rounded-lg transition-all" title="Redo"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" /></svg></button>
+          <div className="flex gap-1.5 p-1 rounded-xl bg-gray-50/50">
+            <button onClick={undo} disabled={history.length === 0} className="p-2 disabled:opacity-10 text-gray-400 hover:text-gray-900 transition-colors" title="Undo">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+            </button>
+            <button onClick={redo} disabled={redoHistory.length === 0} className="p-2 disabled:opacity-10 text-gray-400 hover:text-gray-900 transition-colors" title="Redo">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" /></svg>
+            </button>
           </div>
-          {totalCount > 0 && <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{doneCount}/{totalCount} DONE</span>}
+          {totalCount > 0 && <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{doneCount}/{totalCount} DONE</span>}
         </div>
         
         <div className="flex items-center gap-6">
           <h1 className="text-base font-black text-gray-800 tracking-tight">PYQ Exam Master</h1>
           <div className="flex items-center gap-4">
-            {!showInput && <button onClick={() => setShowInput(true)} className="text-[11px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest">IMPORT</button>}
+            {!showInput && <button onClick={() => setShowInput(true)} className="text-[11px] font-black text-blue-500 hover:text-blue-600 uppercase tracking-widest">IMPORT</button>}
             {data.length > 0 && <button onClick={() => setShowResetConfirm(true)} className="text-[11px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest">RESET</button>}
           </div>
         </div>
@@ -276,55 +278,53 @@ const App: React.FC = () => {
       {/* Input Overlay */}
       {showInput && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-md z-40 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white p-10 rounded-3xl border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-lg bg-white p-10 rounded-3xl border border-gray-100 shadow-2xl">
             <div className="flex justify-between items-center mb-8">
-              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Import Material</h3>
+              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Import Questions</h3>
               {data.length > 0 && <button onClick={() => setShowInput(false)} className="text-gray-300 hover:text-gray-900 transition-colors"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg></button>}
             </div>
-            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Paste PDF/Exam text here..." className="w-full h-64 p-6 border border-gray-100 rounded-2xl text-sm outline-none bg-gray-50 mb-8 font-mono leading-relaxed" />
-            <button onClick={handleFormat} disabled={isLoading || !rawText.trim()} className="w-full py-5 rounded-2xl font-black text-sm uppercase tracking-[0.3em] bg-blue-600 text-white shadow-xl hover:bg-blue-700 disabled:opacity-30 transition-all">{isLoading ? 'Processing Material...' : 'Generate Tracker'}</button>
+            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Paste exam text here..." className="w-full h-64 p-6 border border-gray-100 rounded-2xl text-sm outline-none bg-gray-50 mb-8 font-mono leading-relaxed" />
+            <button onClick={handleFormat} disabled={isLoading || !rawText.trim()} className="w-full py-5 rounded-2xl font-black text-sm uppercase tracking-[0.3em] bg-blue-600 text-white shadow-xl hover:bg-blue-700 disabled:opacity-30 transition-all">{isLoading ? 'Formatting...' : 'Generate Tracker'}</button>
           </div>
         </div>
       )}
 
-      {/* Custom Reset Confirmation Modal */}
+      {/* Custom Reset Modal (Replaces window.confirm) */}
       {showResetConfirm && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full border border-gray-50 text-center animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full border border-gray-100 text-center animate-in zoom-in-95">
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             </div>
-            <h4 className="text-lg font-black text-gray-900 mb-2">Reset Workspace?</h4>
-            <p className="text-sm text-gray-500 mb-8">This will clear all your progress and imported questions. This action can be undone via Ctrl+Z.</p>
+            <h4 className="text-lg font-black text-gray-900 mb-2">Reset All Progress?</h4>
+            <p className="text-sm text-gray-500 mb-8 leading-relaxed">This will clear your imported questions and all study progress. You can undo this with Ctrl+Z after resetting.</p>
             <div className="flex gap-4">
-              <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 text-xs font-black text-gray-500 bg-gray-100 rounded-2xl hover:bg-gray-200 transition-colors">CANCEL</button>
-              <button onClick={executeReset} className="flex-1 py-4 text-xs font-black text-white bg-red-500 rounded-2xl hover:bg-red-600 shadow-lg transition-all">YES, RESET</button>
+              <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 text-xs font-black text-gray-400 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors">CANCEL</button>
+              <button onClick={executeReset} className="flex-1 py-4 text-xs font-black text-white bg-red-500 rounded-2xl hover:bg-red-600 shadow-xl transition-all">YES, RESET</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Linking Modal */}
+      {/* Linking Mode UI */}
       {pendingLink && (
         <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-50">
-            <div className="text-center mb-8">
-              <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connect Questions</h4>
-            </div>
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-100">
+            <div className="text-center mb-8"><h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Connection Style</h4></div>
             <div className="grid grid-cols-2 gap-4 mb-8">
-              <button onClick={() => setLinkConfig({...linkConfig, type: 'solid'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'solid' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>SOLID (SYNC)</button>
-              <button onClick={() => setLinkConfig({...linkConfig, type: 'dotted'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'dotted' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>DOTTED (VISUAL)</button>
+              <button onClick={() => setLinkConfig({...linkConfig, type: 'solid'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'solid' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-400'}`}>SOLID (SYNC)</button>
+              <button onClick={() => setLinkConfig({...linkConfig, type: 'dotted'})} className={`py-5 text-[10px] font-black rounded-2xl border transition-all ${linkConfig.type === 'dotted' ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-400'}`}>DOTTED (VISUAL)</button>
             </div>
             <div className="grid grid-cols-6 gap-3 mb-8">
               {COLORS.map(c => <button key={c.value} onClick={() => setLinkConfig({...linkConfig, color: c.value})} className={`w-full aspect-square rounded-full transition-transform hover:scale-110 ${linkConfig.color === c.value ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`} style={{ backgroundColor: c.value }} />)}
             </div>
-            <button onClick={finalizeLink} className="w-full py-5 bg-blue-600 text-white text-[11px] font-black rounded-2xl uppercase shadow-lg">Confirm Connection</button>
+            <button onClick={finalizeLink} className="w-full py-5 bg-blue-600 text-white text-[11px] font-black rounded-2xl uppercase">Confirm Connection</button>
           </div>
         </div>
       )}
 
-      {/* 2-Column Grid Workspace */}
-      <main ref={containerRef} className="flex-grow overflow-y-auto w-full p-6 relative scrollbar-hide">
+      {/* Main Workspace: Side-by-Side (2 Column Grid) */}
+      <main ref={containerRef} className="flex-grow overflow-y-auto w-full p-8 relative scrollbar-hide">
         <svg className="absolute inset-0 pointer-events-none w-full h-full min-h-screen z-10">
           {lineCoords.map((l) => (
             <g key={l.id} className="pointer-events-auto">
@@ -335,15 +335,15 @@ const App: React.FC = () => {
         </svg>
 
         {data.length > 0 ? (
-          <div className="w-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 pb-32">
+          <div className="w-full max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 pb-40 items-start">
             {data.map((semester) => (
               <div key={semester.id} className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm relative group h-fit">
-                <div className="flex items-center gap-4 mb-8 border-b border-gray-50 pb-3">
-                  <h2 className="text-5xl font-black text-gray-900 handwritten italic tracking-tighter leading-none">{semester.title}</h2>
-                  <div className="flex-grow h-[1px] bg-gray-100/50"></div>
+                <div className="flex items-center gap-4 mb-10 border-b border-gray-50 pb-4">
+                  <h2 className="text-6xl font-black text-gray-900 handwritten italic tracking-tighter leading-none">{semester.title}</h2>
+                  <div className="flex-grow h-[1px] bg-gray-50"></div>
                 </div>
                 
-                <div className="space-y-10">
+                <div className="space-y-12">
                   {semester.questions.map((q, idx) => (
                     <React.Fragment key={q.id}>
                       <QuestionCard 
@@ -355,9 +355,9 @@ const App: React.FC = () => {
                         registerRef={registerSqRef} 
                       />
                       {idx < semester.questions.length - 1 && (
-                        <div className="flex items-center gap-8 py-2">
+                        <div className="flex items-center gap-8 py-4">
                           <div className="h-[1px] bg-gray-50 flex-grow"></div>
-                          <span className="text-[10px] font-black text-gray-200 uppercase tracking-[0.8em]">OR</span>
+                          <span className="text-[10px] font-black text-gray-100 uppercase tracking-[1em]">OR</span>
                           <div className="h-[1px] bg-gray-50 flex-grow"></div>
                         </div>
                       )}
@@ -369,15 +369,15 @@ const App: React.FC = () => {
           </div>
         ) : !isLoading && !showInput && (
           <div className="flex flex-col items-center justify-center h-full text-gray-300">
-            <p className="text-sm font-black uppercase tracking-widest mb-8">Workspace Empty</p>
-            <button onClick={() => setShowInput(true)} className="px-12 py-5 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl">Initialize Tracker</button>
+            <p className="text-sm font-black uppercase tracking-widest mb-8">No content</p>
+            <button onClick={() => setShowInput(true)} className="px-12 py-5 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl">Start Tracker</button>
           </div>
         )}
       </main>
 
-      {/* Target Mode UI */}
+      {/* Selection Notification */}
       {linkingId && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-10 py-5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-[0_25px_70px_-15px_rgba(0,0,0,0.6)] z-50 flex items-center gap-6 animate-bounce">
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-10 py-5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-2xl z-50 flex items-center gap-6 animate-bounce">
           <div className="relative">
             <div className="w-3 h-3 rounded-full bg-blue-400 animate-ping absolute"></div>
             <div className="w-3 h-3 rounded-full bg-blue-400 relative"></div>
