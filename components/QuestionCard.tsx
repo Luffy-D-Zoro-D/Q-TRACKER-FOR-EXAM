@@ -13,6 +13,7 @@ interface QuestionCardProps {
   questionFrequency?: number; // How many times this question appears across semesters
   fontSize?: number;
   showFrequency?: boolean;
+  questionGap?: number;
 }
 
 const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -25,7 +26,8 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   compactMode = false,
   questionFrequency = 1,
   fontSize = 13,
-  showFrequency = true
+  showFrequency = true,
+  questionGap = 8
 }) => {
   const { number, subQuestions, id: qId } = question;
 
@@ -40,7 +42,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
       <div className="relative group/q">
         <div className="flex items-start gap-3">
           <span className="text-xs font-black text-gray-300 mt-0.5 min-w-[24px]" style={{ fontSize: `${labelSize}px` }}>{number}.</span>
-          <div className="flex-grow space-y-1">
+          <div className="flex-grow flex flex-col" style={{ gap: `${questionGap}px` }}>
             {subQuestions.map((sq) => (
               <div
                 key={sq.id}
@@ -52,7 +54,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                   <div className="absolute -left-3 -right-3 top-1/2 -translate-y-1/2 h-[1px] bg-gray-900 z-10 pointer-events-none rounded-full opacity-40"></div>
                 )}
 
-                <div className={`group/item flex items-start gap-3 py-0.5 transition-all duration-300 ${sq.isDone ? 'opacity-30 grayscale' : ''}`}>
+                <div className={`group/item flex items-start gap-3 transition-all duration-300 ${sq.isDone ? 'opacity-30 grayscale' : ''}`}>
                   <span className="text-xs font-bold text-gray-400 w-4 mt-0.5" style={{ fontSize: `${labelSize}px` }}>{sq.label.replace(/[()]/g, '')}</span>
 
                   <p className="leading-snug flex-grow font-medium text-gray-700 select-none" style={{ fontSize: `${fontSize}px` }}>
@@ -99,7 +101,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
     <div className="relative group/q">
       <div className="flex items-start gap-6">
         <span className="text-lg font-black text-gray-200 mt-1 min-w-[28px]" style={{ fontSize: `${fontSize + 2}px` }}>{number}.</span>
-        <div className="flex-grow space-y-5">
+        <div className="flex-grow flex flex-col" style={{ gap: `${questionGap * 2}px` }}>
           {subQuestions.map((sq) => (
             <div
               key={sq.id}

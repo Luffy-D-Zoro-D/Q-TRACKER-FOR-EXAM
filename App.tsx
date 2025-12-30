@@ -113,6 +113,30 @@ const App: React.FC = () => {
     return true;
   });
 
+  const [cardGap, setCardGap] = useState(() => {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (saved) {
+      try { return JSON.parse(saved).cardGap ?? 32; } catch (e) { return 32; }
+    }
+    return 32;
+  });
+
+  const [dividerGap, setDividerGap] = useState(() => {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (saved) {
+      try { return JSON.parse(saved).dividerGap ?? 4; } catch (e) { return 4; }
+    }
+    return 4;
+  });
+
+  const [questionGap, setQuestionGap] = useState(() => {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (saved) {
+      try { return JSON.parse(saved).questionGap ?? 8; } catch (e) { return 8; }
+    }
+    return 8;
+  });
+
   const [showSettings, setShowSettings] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
 
@@ -137,8 +161,17 @@ const App: React.FC = () => {
   }, [data, links, showInput]);
 
   useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ cardWidth, fontSize, cardPadding, showFrequency, twoColumnLayout }));
-  }, [cardWidth, fontSize, cardPadding, showFrequency, twoColumnLayout]);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      cardWidth,
+      fontSize,
+      cardPadding,
+      showFrequency,
+      twoColumnLayout,
+      cardGap,
+      dividerGap,
+      questionGap
+    }));
+  }, [cardWidth, fontSize, cardPadding, showFrequency, twoColumnLayout, cardGap, dividerGap, questionGap]);
 
   const pushState = useCallback((newData: SemesterGroup[], newLinks: LinkEdge[]) => {
     setHistory(prev => [...prev, { data, links }].slice(-50));
@@ -519,6 +552,42 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            <div className="space-y-5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Card Vertical Gap</label>
+                <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{cardGap}px</span>
+              </div>
+              <input type="range" min="0" max="100" step="4" value={cardGap} onChange={(e) => setCardGap(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <div className="flex justify-between text-[8px] font-bold text-gray-300 uppercase">
+                <span>Minimal</span>
+                <span>Wide</span>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Divider Spacing</label>
+                <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{dividerGap}px</span>
+              </div>
+              <input type="range" min="0" max="40" step="2" value={dividerGap} onChange={(e) => setDividerGap(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <div className="flex justify-between text-[8px] font-bold text-gray-300 uppercase">
+                <span>Tight</span>
+                <span>Spacious</span>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Internal Gap</label>
+                <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{questionGap}px</span>
+              </div>
+              <input type="range" min="0" max="32" step="2" value={questionGap} onChange={(e) => setQuestionGap(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <div className="flex justify-between text-[8px] font-bold text-gray-300 uppercase">
+                <span>Minimal</span>
+                <span>Wide</span>
+              </div>
+            </div>
+
             <div className="pt-8 border-t border-gray-50 space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
@@ -574,7 +643,7 @@ const App: React.FC = () => {
         </svg>
 
         {data.length > 0 ? (
-          <div className={`w-full mx-auto grid ${twoColumnLayout ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-8 pb-32 transition-all duration-500`} style={{ maxWidth: `${twoColumnLayout ? cardWidth * 2 : cardWidth}px` }}>
+          <div className={`w-full mx-auto grid ${twoColumnLayout ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} pb-32 transition-all duration-500`} style={{ maxWidth: `${twoColumnLayout ? cardWidth * 2 : cardWidth}px`, gap: `${cardGap}px` }}>
             {data.map((semester) => (
               <div key={semester.id} className={`bg-white rounded-${compactMode ? '2xl' : '3xl'} ${getPaddingClass(cardPadding)} border border-gray-100 shadow-sm relative group h-fit flex gap-${compactMode ? '3' : '5'} transition-all duration-300 hover:shadow-md`}>
                 {/* Semester Title - Gray Box on Left (Centered) */}
@@ -600,9 +669,10 @@ const App: React.FC = () => {
                         compactMode={compactMode}
                         fontSize={fontSize}
                         showFrequency={showFrequency}
+                        questionGap={questionGap}
                       />
                       {idx < semester.questions.length - 1 && (
-                        <div className="flex items-center gap-4 py-1">
+                        <div className="flex items-center gap-4" style={{ paddingBlock: `${dividerGap}px` }}>
                           <div className="h-[1px] bg-gray-50 flex-grow"></div>
                           <span className="text-[9px] font-black text-gray-200 uppercase tracking-[0.6em]">OR</span>
                           <div className="h-[1px] bg-gray-50 flex-grow"></div>
